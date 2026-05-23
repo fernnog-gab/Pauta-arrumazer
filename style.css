@@ -1,7 +1,7 @@
 /* ==========================================================================
    VARIÁVEIS GLOBAIS (TEMA INSTITUCIONAL)
    ========================================================================== */
-   :root {
+:root {
     --primary-color: #1e3a8a;       /* Azul institucional escuro */
     --primary-hover: #1e40af;       /* Azul um pouco mais claro para hover */
     --secondary-color: #f1f5f9;     /* Fundo cinza bem claro para botões secundários */
@@ -11,7 +11,7 @@
     --border-color: #cbd5e1;        /* Bordas delicadas */
     --accent-color: #3b82f6;        /* Cor de destaque para a área de upload */
     --success-color: #10b981;       /* Verde para mensagens de sucesso */
-    --text-main: #334155;           /* Texto principal (cinza escuro, mais suave que o preto puro) */
+    --text-main: #334155;           /* Texto principal (cinza escuro) */
     --text-muted: #64748b;          /* Texto secundário/instruções */
     --radius: 8px;                  /* Arredondamento suave padrão */
     --transition: all 0.2s ease-in-out;
@@ -63,7 +63,7 @@ body {
 .app-container {
     background: var(--surface-color);
     width: 100%;
-    max-width: 600px; /* Largura focada para não espalhar o conteúdo na tela */
+    max-width: 600px;
     padding: 2.5rem;
     border-radius: var(--radius);
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
@@ -80,7 +80,7 @@ body {
     text-align: center;
     cursor: pointer;
     transition: var(--transition);
-    background-color: #eff6ff; /* Fundo azul bem claro */
+    background-color: #eff6ff; 
 }
 
 .upload-zone:hover, .upload-zone.dragover {
@@ -181,5 +181,33 @@ body {
     font-weight: 500;
 }
 
+.success-message i {
+    width: 48px;
+    height: 48px;
+    color: var(--success-color);
+    margin-bottom: 1rem;
+}
+
 /* Animação de Rotação para o Ícone de Loading */
 .spinner {
+    animation: spin 1s linear infinite;
+    color: var(--primary-color);
+    width: 40px;
+    height: 40px;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Limpeza de visual na impressão da interface */
+@media print {
+    .upload-zone, .button-group {
+        display: none !important;
+    }
+    .app-container {
+        border: none;
+        box-shadow: none;
+    }
+}
