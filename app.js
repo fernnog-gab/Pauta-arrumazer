@@ -1,5 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
-    // [Setup de UI omitido por brevidade - Mesma lógica de Drag/Drop e ocultar/mostrar seções]
+    
+    // Elementos da UI
     const dropZone = document.getElementById("drop-zone");
     const fileInput = document.getElementById("file-input");
     const loadingState = document.getElementById("loading-state");
@@ -11,12 +12,18 @@ document.addEventListener("DOMContentLoaded", () => {
     let processedDocxBlob = null;
     let generatedHtmlString = "";
 
-    // Regex Arquiteturalmente revisada:
-    // ^\s* -> Garante que olha apenas o início da linha (tolerando espaços).
-    // Mapeamento expandido com base no DOCX real.
-    const regexExclusao = /^\s*(RECORRENTE|RECORRIDA|RECORRIDO|ADVOGADA|ADVOGADO|PERITO|PERITA|CUSTOS LEGIS|TERCEIRO|AGRAVANTE|AGRAVADA|AGRAVADO|TESTEMUNHA)[:\s]/i;
+    // Eventos Drag & Drop
+    dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.classList.add("dragover");
+    });
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+    dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("dragover");
+        if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
 
-    // ... (Eventos de UI mantidos) ...
     dropZone.addEventListener("click", () => fileInput.click());
     fileInput.addEventListener("change", (e) => {
         if (e.target.files.length) handleFile(e.target.files[0]);
@@ -24,13 +31,11 @@ document.addEventListener("DOMContentLoaded", () => {
     btnRestart.addEventListener("click", () => window.location.reload());
 
     async function handleFile(file) {
-        if (!file.name.endsWith(".docx")) return alert("Apenas arquivos .docx");
+        if (!file.name.endsWith(".docx")) return alert("Apenas arquivos .docx são permitidos.");
         
         dropZone.classList.add("hidden");
         loadingState.classList.remove("hidden");
         
-        // Uso de setTimeout para permitir que a UI renderize o estado de loading 
-        // antes de bloquear a thread principal com o parser do XML.
         setTimeout(async () => {
             try {
                 const arrayBuffer = await file.arrayBuffer();
@@ -38,7 +43,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 loadingState.classList.add("hidden");
                 actionsZone.classList.remove("hidden");
             } catch (error) {
-                console.error(error);
+                console.error("Erro no processamento:", error);
                 alert("Falha ao processar arquivo. Verifique a integridade do DOCX.");
                 window.location.reload();
             }
@@ -53,84 +58,135 @@ document.addEventListener("DOMContentLoaded", () => {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(documentXml, "application/xml");
         
-        // Array.from congela a lista, permitindo deletar nós sem quebrar a iteração
         const paragraphs = Array.from(xmlDoc.getElementsByTagName("w:p"));
         
         let extrairParaHtml = [];
-        let isCompetenciaRecursalIniciada = false;
+        let isHeader = true;
+        let isDeletandoLixo = false;
 
-        // Processamento O(n) estrito top-down
         for (const p of paragraphs) {
             const textContent = p.textContent.trim();
-            if (!textContent) continue;
 
-            // Gatilho da Máquina de Estado
-            if (!isCompetenciaRecursalIniciada) {
+            // 1. Destruição de Cabeçalho Institucional
+            if (isHeader) {
                 if (textContent.toUpperCase().includes("FEITOS DE COMPETÊNCIA RECURSAL")) {
-                    isCompetenciaRecursalIniciada = true;
+                    isHeader = false; 
+                    extrairParaHtml.push(textContent);
+                } else {
+                    p.parentNode.removeChild(p); 
                 }
-                continue; // Pula o processamento até o gatilho
+                continue;
             }
 
-            // Regra de Negócio: Deleta se bater com a Regex, senão preserva e joga pro HTML
-            if (regexExclusao.test(textContent)) {
-                p.parentNode.removeChild(p);
-            } else {
-                // Preserva no DOCX e salva para o HTML
+            // 2. Destruição de linhas vazias extras
+            if (!textContent) {
+                p.parentNode.removeChild(p); 
+                continue;
+            }
+
+            const isProcesso = /^\d+\s*-/.test(textContent);
+            const isRelator = /^RELATOR[A]?:/i.test(textContent);
+
+            // 3. Regra de Negócio: Guardar ou Deletar Blocos
+            if (isProcesso) {
+                isDeletandoLixo = false; 
                 extrairParaHtml.push(textContent);
+                
+                // Injetar borda superior fina e cinza direto no XML do DOCX
+                let pPr = p.getElementsByTagName("w:pPr")[0];
+                if (!pPr) {
+                    pPr = xmlDoc.createElement("w:pPr");
+                    p.insertBefore(pPr, p.firstChild);
+                }
+                const pBdr = xmlDoc.createElement("w:pBdr");
+                const topBdr = xmlDoc.createElement("w:top");
+                topBdr.setAttribute("w:val", "single");
+                topBdr.setAttribute("w:sz", "4"); // Espessura bem fina
+                topBdr.setAttribute("w:space", "10");
+                topBdr.setAttribute("w:color", "D3D3D3"); // Cinza Claro
+                
+                pBdr.appendChild(topBdr);
+                pPr.appendChild(pBdr);
+
+            } else if (isRelator) {
+                extrairParaHtml.push(textContent);
+                // Ativa a exclusão em massa para limpar plurais e quebras de linha
+                isDeletandoLixo = true; 
+
+            } else if (isDeletandoLixo) {
+                // Apaga advogados, partes, testemunhas, textos longos, etc.
+                p.parentNode.removeChild(p); 
+            } else {
+                // Margem de segurança: Remove sujeiras perdidas entre o Processo e o Relator
+                p.parentNode.removeChild(p);
             }
         }
 
-        // Serializa DOCX
+        // Empacota de volta para DOCX
         const serializer = new XMLSerializer();
         const newXmlString = serializer.serializeToString(xmlDoc);
         loadedZip.file("word/document.xml", newXmlString);
         processedDocxBlob = await loadedZip.generateAsync({ type: "blob" });
 
-        // Gera HTML
+        // Gera a versão HTML da Pauta
         generateHtmlTemplate(extrairParaHtml);
     }
 
     function generateHtmlTemplate(linhas) {
-        const tableRows = linhas.map(linha => {
-            // Identifica se a linha é o início do processo (ex: "01 - PROCESSO...")
-            const isProcesso = /^\d+\s*-/.test(linha); 
-            return `
-                <tr>
-                    <td class="${isProcesso ? 'processo-header' : 'processo-relator'}">${linha}</td>
-                </tr>
+        // Separa o título (FEITOS DE COMPETÊNCIA...)
+        const titulo = linhas.shift(); 
+        
+        // Constrói os cards para HTML
+        let htmlCards = "";
+        for (let i = 0; i < linhas.length; i += 2) {
+            const numeroProcesso = linhas[i] || "";
+            const relatorProcesso = linhas[i + 1] || "";
+            
+            htmlCards += `
+                <div class="processo-card">
+                    <div class="processo-numero">${numeroProcesso}</div>
+                    <div class="processo-relator">${relatorProcesso}</div>
+                </div>
             `;
-        }).join("");
+        }
 
         generatedHtmlString = `
             <!DOCTYPE html>
             <html lang="pt-BR">
             <head>
                 <meta charset="UTF-8">
+                <title>Pauta de Julgamento - Resumida</title>
                 <style>
-                    body { font-family: Arial, sans-serif; margin: 0; padding: 0; color: #000; }
-                    table { width: 100%; border-collapse: collapse; }
-                    td { padding: 4px 8px; font-size: 11pt; border-bottom: 1px solid #ddd; }
-                    .processo-header { font-weight: bold; padding-top: 15px; border-bottom: none; font-size: 12pt; }
-                    .processo-relator { padding-bottom: 15px; color: #333; }
-                    @page { size: A4 portrait; margin: 2cm; }
+                    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; background: #fff; color: #333; }
+                    .container { max-width: 800px; margin: 0 auto; padding: 2cm; }
+                    .titulo { text-align: center; font-size: 14pt; font-weight: bold; margin-bottom: 25px; color: #1e293b; text-transform: uppercase; }
+                    .processo-card { border-top: 1px solid #e2e8f0; padding: 12px 0; page-break-inside: avoid; }
+                    .processo-numero { font-weight: 600; font-size: 11pt; color: #0f172a; margin-bottom: 4px; }
+                    .processo-relator { font-size: 10pt; color: #475569; }
+                    
+                    @page { size: A4 portrait; margin: 1.5cm; }
                     @media print {
                         body { filter: grayscale(100%); }
-                        td { page-break-inside: avoid; }
+                        .container { padding: 0; width: 100%; max-width: 100%; }
+                        .titulo { color: #000; }
+                        .processo-card { border-top: 1px solid #cbd5e1; }
+                        .processo-numero { color: #000; }
+                        .processo-relator { color: #333; }
                     }
                 </style>
             </head>
             <body>
-                <table>
-                    <tbody>${tableRows}</tbody>
-                </table>
+                <div class="container">
+                    <div class="titulo">${titulo}</div>
+                    ${htmlCards}
+                </div>
                 <script>window.print();</script>
             </body>
             </html>
         `;
     }
 
-    // Ações de download...
+    // Handlers de Download
     btnDocx.addEventListener("click", () => triggerDownload(processedDocxBlob, "Pauta_Resumida.docx"));
     btnHtml.addEventListener("click", () => {
         const blob = new Blob([generatedHtmlString], { type: 'text/html' });
@@ -143,6 +199,6 @@ document.addEventListener("DOMContentLoaded", () => {
         a.href = url;
         a.download = filename;
         a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000); // Limpeza de memória segura
+        setTimeout(() => URL.revokeObjectURL(url), 1000); 
     }
 });
