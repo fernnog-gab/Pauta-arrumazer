@@ -1,8 +1,3 @@
-Aqui está uma proposta completa e profissional para o seu arquivo `README.md`. Ele foi estruturado para apresentar o projeto de forma clara tanto para desenvolvedores que venham a dar manutenção quanto para os usuários finais do gabinete.
-
----
-
-```markdown
 # ⚖️ Extrator e Simplificador de Pautas de Julgamento
 
 Uma aplicação web *client-side* (Front-end) desenvolvida para automatizar a limpeza e formatação de pautas de julgamento, otimizando a rotina de trabalho em gabinetes de magistrados.
