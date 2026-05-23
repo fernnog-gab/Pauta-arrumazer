@@ -1,0 +1,185 @@
+/* ==========================================================================
+   VARIÁVEIS GLOBAIS (TEMA INSTITUCIONAL)
+   ========================================================================== */
+   :root {
+    --primary-color: #1e3a8a;       /* Azul institucional escuro */
+    --primary-hover: #1e40af;       /* Azul um pouco mais claro para hover */
+    --secondary-color: #f1f5f9;     /* Fundo cinza bem claro para botões secundários */
+    --secondary-hover: #e2e8f0;     /* Hover do botão secundário */
+    --bg-color: #f8fafc;            /* Fundo geral da página */
+    --surface-color: #ffffff;       /* Fundo do card principal */
+    --border-color: #cbd5e1;        /* Bordas delicadas */
+    --accent-color: #3b82f6;        /* Cor de destaque para a área de upload */
+    --success-color: #10b981;       /* Verde para mensagens de sucesso */
+    --text-main: #334155;           /* Texto principal (cinza escuro, mais suave que o preto puro) */
+    --text-muted: #64748b;          /* Texto secundário/instruções */
+    --radius: 8px;                  /* Arredondamento suave padrão */
+    --transition: all 0.2s ease-in-out;
+}
+
+/* ==========================================================================
+   RESETS E BASE
+   ========================================================================== */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem;
+    line-height: 1.5;
+}
+
+/* ==========================================================================
+   LAYOUT PRINCIPAL
+   ========================================================================== */
+.app-header {
+    text-align: center;
+    margin-bottom: 2rem;
+    color: var(--primary-color);
+}
+
+.app-header i {
+    width: 48px;
+    height: 48px;
+    stroke-width: 1.5;
+    margin-bottom: 0.5rem;
+}
+
+.app-header h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.app-container {
+    background: var(--surface-color);
+    width: 100%;
+    max-width: 600px; /* Largura focada para não espalhar o conteúdo na tela */
+    padding: 2.5rem;
+    border-radius: var(--radius);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    border: 1px solid var(--border-color);
+}
+
+/* ==========================================================================
+   ÁREA DE UPLOAD (DRAG & DROP)
+   ========================================================================== */
+.upload-zone {
+    border: 2px dashed var(--accent-color);
+    border-radius: var(--radius);
+    padding: 4rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    background-color: #eff6ff; /* Fundo azul bem claro */
+}
+
+.upload-zone:hover, .upload-zone.dragover {
+    background-color: #dbeafe;
+    border-color: var(--primary-color);
+}
+
+.upload-icon {
+    width: 64px;
+    height: 64px;
+    color: var(--accent-color);
+    margin-bottom: 1rem;
+    stroke-width: 1.5;
+}
+
+.upload-zone h2 {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--text-main);
+}
+
+/* ==========================================================================
+   BOTÕES E AÇÕES
+   ========================================================================== */
+.button-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+}
+
+.btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.875rem 1.5rem;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    width: 100%;
+}
+
+.btn i {
+    width: 20px;
+    height: 20px;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+}
+
+.btn-secondary {
+    background-color: var(--secondary-color);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    background-color: var(--secondary-hover);
+}
+
+.btn-outline {
+    background-color: transparent;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
+.btn-outline:hover {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
+/* ==========================================================================
+   ESTADOS AUXILIARES (LOADING, SUCESSO E HIDDEN)
+   ========================================================================== */
+.hidden {
+    display: none !important;
+}
+
+#loading-state, .success-message {
+    text-align: center;
+    padding: 3rem 0;
+}
+
+#loading-state p {
+    color: var(--text-muted);
+    margin-top: 1rem;
+    font-weight: 500;
+}
+
+/* Animação de Rotação para o Ícone de Loading */
+.spinner {
