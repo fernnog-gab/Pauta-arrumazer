@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gabinete | Filtragem de Pauta</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+    <header class="app-header">
+        <i data-lucide="scale"></i>
+        <h1>Extrator de Pautas de Julgamento</h1>
+    </header>
+
+    <main class="app-container">
+        <section class="upload-zone" id="drop-zone">
+            <input type="file" id="file-input" accept=".docx" hidden aria-label="Upload DOCX">
+            <i data-lucide="upload-cloud" class="upload-icon"></i>
+            <h2>Arraste a Pauta (DOCX) aqui</h2>
+        </section>
+
+        <div id="loading-state" class="hidden">
+            <i data-lucide="loader-2" class="spinner"></i>
+            <p>Filtrando processos...</p>
+        </div>
+
+        <section id="actions-zone" class="actions-zone hidden">
+            <div class="success-message">
+                <i data-lucide="check-circle"></i>
+                <p>Pauta processada com sucesso!</p>
+            </div>
+            <div class="button-group">
+                <button id="btn-download-docx" class="btn btn-primary">
+                    <i data-lucide="file-word"></i> Salvar DOCX Resumido
+                </button>
+                <button id="btn-download-html" class="btn btn-secondary">
+                    <i data-lucide="printer"></i> Visualizar/Imprimir Pauta
+                </button>
+                <button id="btn-restart" class="btn btn-outline">Processar outra pauta</button>
+            </div>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+    <script>lucide.createIcons();</script>
+</body>
+</html>
