@@ -50,6 +50,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 100);
     }
 
+    // Função utilitária pura para sanitização de strings de controle
+    function normalizeTextForMatch(str) {
+        if (!str) return "";
+        return str.trim()
+                  .replace(/\s+/g, " ") // Colapsa espaços duplos ou tabulações
+                  .normalize("NFC")     // Resolve caracteres decompostos do XML do Word
+                  .toUpperCase();
+    }
+
     async function processDocxCore(arrayBuffer) {
         const zip = new JSZip();
         const loadedZip = await zip.loadAsync(arrayBuffer);
@@ -57,40 +66,62 @@ document.addEventListener("DOMContentLoaded", () => {
         
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(documentXml, "application/xml");
-        
         const paragraphs = Array.from(xmlDoc.getElementsByTagName("w:p"));
         
-        let extrairParaHtml = [];
+        // Estados da Máquina
         let isHeader = true;
         let isDeletandoLixo = false;
+        let capturandoAviso = false;
+
+        // Buffers de Dados
+        let dataSessao = "";
+        let avisoEspecial = [];
+        let processosExtraidos = [];
+        let processoAtual = null;
 
         for (const p of paragraphs) {
             const textContent = p.textContent.trim();
+            if (!textContent) {
+                p.parentNode.removeChild(p); 
+                continue; // Otimização de performance: pula processamento de nós vazios
+            }
 
-            // 1. Destruição de Cabeçalho Institucional
+            const textNorm = normalizeTextForMatch(textContent);
+
+            // Fase 1: Análise de Cabeçalho e Gatilhos Prévios
             if (isHeader) {
-                if (textContent.toUpperCase().includes("FEITOS DE COMPETÊNCIA RECURSAL")) {
+                // Regex corrigida com bloco Latin-1 (À-ÿ)
+                if (textNorm.includes("(HORÁRIO OFICIAL DE MATO GROSSO) DE")) {
+                    const match = textContent.match(/de\s+([0-9]{1,2}\s+de\s+[A-Za-zÀ-ÿ]+\s+de\s+[0-9]{4})/i);
+                    if (match) dataSessao = match[1];
+                }
+
+                // Condicional mutuamente exclusiva para captura do aviso legal
+                if (textNorm.includes("§4º DO ART. 937")) {
+                    capturandoAviso = true;
+                    avisoEspecial.push(textContent); // Inclui a linha gatilho
+                } 
+                else if (capturandoAviso && !textNorm.includes("FEITOS DE COMPETÊNCIA RECURSAL")) {
+                    avisoEspecial.push(textContent); // Continua capturando até bater no marcador
+                }
+
+                // Fim do Cabeçalho - Gatilho Mestre
+                if (textNorm.includes("FEITOS DE COMPETÊNCIA RECURSAL")) {
                     isHeader = false; 
-                    extrairParaHtml.push(textContent);
                 } else {
                     p.parentNode.removeChild(p); 
                 }
                 continue;
             }
 
-            // 2. Destruição de linhas vazias extras
-            if (!textContent) {
-                p.parentNode.removeChild(p); 
-                continue;
-            }
-
+            // Fase 2: Identificação de Processos e Relatores
             const isProcesso = /^\d+\s*-/.test(textContent);
-            const isRelator = /^RELATOR[A]?:/i.test(textContent);
+            const isRelator = textNorm.startsWith("RELATOR") || textNorm.startsWith("RELATORA");
 
-            // 3. Regra de Negócio: Guardar ou Deletar Blocos
             if (isProcesso) {
                 isDeletandoLixo = false; 
-                extrairParaHtml.push(textContent);
+                processoAtual = { numero: textContent, relator: "" };
+                processosExtraidos.push(processoAtual);
                 
                 // Injetar borda superior fina e cinza direto no XML do DOCX
                 let pPr = p.getElementsByTagName("w:pPr")[0];
@@ -109,15 +140,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 pPr.appendChild(pBdr);
 
             } else if (isRelator) {
-                extrairParaHtml.push(textContent);
-                // Ativa a exclusão em massa para limpar plurais e quebras de linha
+                if (processoAtual) {
+                    processoAtual.relator = textContent;
+                }
                 isDeletandoLixo = true; 
 
             } else if (isDeletandoLixo) {
-                // Apaga advogados, partes, testemunhas, textos longos, etc.
                 p.parentNode.removeChild(p); 
             } else {
-                // Margem de segurança: Remove sujeiras perdidas entre o Processo e o Relator
                 p.parentNode.removeChild(p);
             }
         }
@@ -129,26 +159,32 @@ document.addEventListener("DOMContentLoaded", () => {
         processedDocxBlob = await loadedZip.generateAsync({ type: "blob" });
 
         // Gera a versão HTML da Pauta
-        generateHtmlTemplate(extrairParaHtml);
+        generateHtmlTemplate(dataSessao, avisoEspecial, processosExtraidos);
     }
 
-    function generateHtmlTemplate(linhas) {
-        // Separa o título (FEITOS DE COMPETÊNCIA...)
-        const titulo = linhas.shift(); 
-        
-        // Constrói os cards para HTML
-        let htmlCards = "";
-        for (let i = 0; i < linhas.length; i += 2) {
-            const numeroProcesso = linhas[i] || "";
-            const relatorProcesso = linhas[i + 1] || "";
-            
-            htmlCards += `
-                <div class="processo-card">
-                    <div class="processo-numero">${numeroProcesso}</div>
-                    <div class="processo-relator">${relatorProcesso}</div>
+    function generateHtmlTemplate(dataSessao, avisoEspecial, processos) {
+        let htmlCards = processos.map(proc => `
+            <div class="processo-card">
+                <div class="processo-info">
+                    <div class="processo-numero">${proc.numero}</div>
+                    <div class="processo-relator">${proc.relator}</div>
                 </div>
-            `;
-        }
+                <div class="processo-actions">
+                    <div class="action-box">
+                        <span class="action-label">DIVERGIR</span>
+                        <div class="square"></div>
+                    </div>
+                    <div class="action-box">
+                        <span class="action-label">ACOMPANHAR</span>
+                        <div class="square"></div>
+                    </div>
+                </div>
+            </div>
+        `).join("");
+
+        let htmlAviso = avisoEspecial.length > 0 
+            ? `<div class="aviso-box">${avisoEspecial.join("<br>")}</div>` 
+            : "";
 
         generatedHtmlString = `
             <!DOCTYPE html>
@@ -158,26 +194,41 @@ document.addEventListener("DOMContentLoaded", () => {
                 <title>Pauta de Julgamento - Resumida</title>
                 <style>
                     body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; background: #fff; color: #333; }
-                    .container { max-width: 800px; margin: 0 auto; padding: 2cm; }
-                    .titulo { text-align: center; font-size: 14pt; font-weight: bold; margin-bottom: 25px; color: #1e293b; text-transform: uppercase; }
-                    .processo-card { border-top: 1px solid #e2e8f0; padding: 12px 0; page-break-inside: avoid; }
-                    .processo-numero { font-weight: 600; font-size: 11pt; color: #0f172a; margin-bottom: 4px; }
-                    .processo-relator { font-size: 10pt; color: #475569; }
+                    .container { max-width: 900px; margin: 0 auto; padding: 2cm; }
+                    
+                    /* Cabeçalho */
+                    .header-section { text-align: center; margin-bottom: 25px; }
+                    .titulo { font-size: 14pt; font-weight: bold; color: #000; text-transform: uppercase; margin-bottom: 8px; }
+                    .data-sessao { font-size: 12pt; color: #333; font-weight: 600; }
+                    .aviso-box { border: 2px solid #000; padding: 15px; margin: 0 auto 30px auto; max-width: 80%; text-align: center; font-weight: bold; font-size: 10pt; line-height: 1.4; border-radius: 4px; }
+                    
+                    /* Layout Flexbox Corrigido e Ergonômico */
+                    .processo-card { border-top: 1px solid #cbd5e1; padding: 15px 0; page-break-inside: avoid; display: flex; justify-content: space-between; align-items: flex-start; }
+                    .processo-info { flex: 1; padding-right: 20px; }
+                    .processo-numero { font-weight: 700; font-size: 11pt; color: #000; margin-bottom: 6px; }
+                    .processo-relator { font-size: 10pt; color: #475569; line-height: 1.3; }
+                    
+                    /* Alvos Visuais Redimensionados para Impressão */
+                    .processo-actions { display: flex; gap: 20px; align-items: flex-start; margin-top: -2px; }
+                    .action-box { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+                    .action-label { font-size: 8pt; font-weight: 700; color: #000; letter-spacing: 0.5px; }
+                    .square { width: 70px; height: 70px; border: 2px solid #000; border-radius: 6px; }
                     
                     @page { size: A4 portrait; margin: 1.5cm; }
                     @media print {
                         body { filter: grayscale(100%); }
                         .container { padding: 0; width: 100%; max-width: 100%; }
-                        .titulo { color: #000; }
-                        .processo-card { border-top: 1px solid #cbd5e1; }
-                        .processo-numero { color: #000; }
-                        .processo-relator { color: #333; }
+                        .processo-card { border-top: 1px solid #000; }
                     }
                 </style>
             </head>
             <body>
                 <div class="container">
-                    <div class="titulo">${titulo}</div>
+                    <div class="header-section">
+                        <div class="titulo">FEITOS DE COMPETÊNCIA RECURSAL</div>
+                        <div class="data-sessao">${dataSessao || ""}</div>
+                    </div>
+                    ${htmlAviso}
                     ${htmlCards}
                 </div>
                 <script>window.print();</script>
