@@ -204,7 +204,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 isDeletandoLixo = true; 
 
-                // Mantém a injeção dos quadrados Acompanhar/Divergir nativos no DOCX
+                // NOVO: Injeção de Quadrados de Votação no DOCX (Ordem Invertida)
                 const actionsXml = `
                     <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
                         <w:pPr>
@@ -213,7 +213,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         </w:pPr>
                         <w:r>
                             <w:rPr><w:b/><w:sz w:val="18"/><w:color w:val="555555"/></w:rPr>
-                            <w:t xml:space="preserve">DIVERGIR  </w:t>
+                            <w:t xml:space="preserve">ACOMPANHAR  </w:t>
                         </w:r>
                         <w:r>
                             <w:rPr><w:sz w:val="40"/><w:color w:val="333333"/></w:rPr>
@@ -221,7 +221,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         </w:r>
                         <w:r>
                             <w:rPr><w:b/><w:sz w:val="18"/><w:color w:val="555555"/></w:rPr>
-                            <w:t xml:space="preserve">      ACOMPANHAR  </w:t>
+                            <w:t xml:space="preserve">      DIVERGIR  </w:t>
                         </w:r>
                         <w:r>
                             <w:rPr><w:sz w:val="40"/><w:color w:val="333333"/></w:rPr>
@@ -248,6 +248,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function generateHtmlTemplate(dataSessao, avisoEspecial, processos) {
+        // INVERSÃO DE ORDEM AQUI: Acompanhar primeiro, Divergir depois
         let htmlCards = processos.map(proc => `
             <div class="processo-card">
                 <div class="processo-info">
@@ -256,18 +257,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
                 <div class="processo-actions">
                     <div class="action-box">
-                        <span class="action-label">DIVERGIR</span>
+                        <span class="action-label">ACOMPANHAR</span>
                         <div class="square"></div>
                     </div>
                     <div class="action-box">
-                        <span class="action-label">ACOMPANHAR</span>
+                        <span class="action-label">DIVERGIR</span>
                         <div class="square"></div>
                     </div>
                 </div>
             </div>
         `).join("");
 
-        // A caixa só será criada se o array tiver textos capturados APÓS o gatilho
         let htmlAviso = avisoEspecial.length > 0 
             ? `<div class="aviso-box">${avisoEspecial.join("<br>")}</div>` 
             : "";
@@ -289,22 +289,24 @@ document.addEventListener("DOMContentLoaded", () => {
                     .aviso-box { border: 2px solid #000; padding: 15px; margin: 0 auto 30px auto; max-width: 80%; text-align: center; font-weight: bold; font-size: 10pt; line-height: 1.4; border-radius: 4px; }
                     
                     /* Layout Flexbox */
-                    .processo-card { border-top: 1px solid #cbd5e1; padding: 15px 0; page-break-inside: avoid; display: flex; justify-content: space-between; align-items: flex-start; }
+                    .processo-card { border-top: 1px solid #cbd5e1; padding: 15px 0; page-break-inside: avoid; display: flex; justify-content: space-between; align-items: center; }
                     .processo-info { flex: 1; padding-right: 20px; }
-                    .processo-numero { font-weight: 700; font-size: 11pt; color: #000; margin-bottom: 6px; }
+                    .processo-numero { font-weight: 700; font-size: 11pt; color: #000; margin-bottom: 4px; }
                     .processo-relator { font-size: 10pt; color: #475569; line-height: 1.3; }
                     
-                    /* Redução de 50% nos Quadrados (de 70px para 35px) */
-                    .processo-actions { display: flex; gap: 20px; align-items: flex-start; margin-top: -2px; }
-                    .action-box { display: flex; flex-direction: column; align-items: center; gap: 5px; }
-                    .action-label { font-size: 8pt; font-weight: 700; color: #000; letter-spacing: 0.5px; }
-                    .square { width: 35px; height: 35px; border: 2px solid #000; border-radius: 4px; }
+                    /* REDUÇÃO SIGNIFICATIVA DE TAMANHO (Tamanho elegante de Checkbox) */
+                    .processo-actions { display: flex; gap: 20px; align-items: center; }
+                    .action-box { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+                    .action-label { font-size: 7.5pt; font-weight: 700; color: #555; letter-spacing: 0.5px; }
+                    .square { width: 22px; height: 22px; border: 1.5px solid #333; border-radius: 3px; }
                     
                     @page { size: A4 portrait; margin: 1.5cm; }
                     @media print {
                         body { filter: grayscale(100%); }
                         .container { padding: 0; width: 100%; max-width: 100%; }
-                        .processo-card { border-top: 1px solid #000; }
+                        .processo-card { border-top: 1px solid #000; padding: 12px 0; }
+                        .action-label { color: #000; }
+                        .square { border-color: #000; }
                     }
                 </style>
             </head>
