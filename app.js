@@ -93,27 +93,89 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (match) dataSessao = match[1];
                 }
 
-                // CORREÇÃO: Liga o gatilho, mas não captura a própria linha
                 if (textNorm.includes("§4º DO ART. 937")) {
                     capturandoAviso = true;
                     p.parentNode.removeChild(p);
-                    continue; // Pula para a próxima linha sem salvar esta
+                    continue; 
                 } 
                 else if (capturandoAviso && !textNorm.includes("FEITOS DE COMPETÊNCIA RECURSAL")) {
-                    if (textContent) avisoEspecial.push(textContent); // Só salva o que vier depois
+                    if (textContent) avisoEspecial.push(textContent); 
                     p.parentNode.removeChild(p);
                     continue;
                 }
 
                 if (textNorm.includes("FEITOS DE COMPETÊNCIA RECURSAL")) {
                     isHeader = false; 
+
+                    // 1. Centralizar a expressão "FEITOS DE COMPETÊNCIA RECURSAL" no DOCX
+                    let pPr = p.getElementsByTagName("w:pPr")[0];
+                    if (!pPr) {
+                        pPr = xmlDoc.createElement("w:pPr");
+                        p.insertBefore(pPr, p.firstChild);
+                    }
+                    let jc = pPr.getElementsByTagName("w:jc")[0];
+                    if (!jc) {
+                        jc = xmlDoc.createElement("w:jc");
+                        pPr.appendChild(jc);
+                    }
+                    jc.setAttribute("w:val", "center");
+
+                    // Criamos um ponteiro de referência para inserir os próximos parágrafos em ordem
+                    let referenceNode = p;
+
+                    // 2. Injetar a Data extraída no DOCX
+                    if (dataSessao) {
+                        const dateXml = `
+                            <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                                <w:pPr>
+                                    <w:jc w:val="center"/>
+                                    <w:spacing w:before="120" w:after="240"/>
+                                </w:pPr>
+                                <w:r>
+                                    <w:rPr><w:b/><w:sz w:val="24"/></w:rPr>
+                                    <w:t>${dataSessao}</w:t>
+                                </w:r>
+                            </w:p>
+                        `;
+                        const dateNode = parser.parseFromString(dateXml, "application/xml").documentElement;
+                        const importedDate = xmlDoc.importNode(dateNode, true);
+                        referenceNode.parentNode.insertBefore(importedDate, referenceNode.nextSibling);
+                        referenceNode = importedDate; // Atualiza o ponteiro
+                    }
+
+                    // 3. Injetar o Quadro de Aviso no DOCX (somente se não estiver vazio)
+                    if (avisoEspecial.length > 0) {
+                        const avisoTexto = avisoEspecial.join(" "); // Junta as linhas em um único texto contínuo
+                        const avisoXml = `
+                            <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                                <w:pPr>
+                                    <w:pBdr>
+                                        <w:top w:val="single" w:sz="4" w:space="6" w:color="000000"/>
+                                        <w:left w:val="single" w:sz="4" w:space="6" w:color="000000"/>
+                                        <w:bottom w:val="single" w:sz="4" w:space="6" w:color="000000"/>
+                                        <w:right w:val="single" w:sz="4" w:space="6" w:color="000000"/>
+                                    </w:pBdr>
+                                    <w:jc w:val="center"/>
+                                    <w:spacing w:before="240" w:after="400"/>
+                                </w:pPr>
+                                <w:r>
+                                    <w:rPr><w:b/><w:sz w:val="20"/></w:rPr>
+                                    <w:t>${avisoTexto}</w:t>
+                                </w:r>
+                            </w:p>
+                        `;
+                        const avisoNode = parser.parseFromString(avisoXml, "application/xml").documentElement;
+                        const importedAviso = xmlDoc.importNode(avisoNode, true);
+                        referenceNode.parentNode.insertBefore(importedAviso, referenceNode.nextSibling);
+                    }
+
                 } else {
                     p.parentNode.removeChild(p); 
                 }
                 continue;
             }
 
-            // Fase 2: Identificação de Processos e Relatores
+            // Fase 2: Identificação de Processos e Relatores (Inalterado da versão anterior)
             const isProcesso = /^\d+\s*-/.test(textContent);
             const isRelator = textNorm.startsWith("RELATOR") || textNorm.startsWith("RELATORA");
 
@@ -122,7 +184,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 processoAtual = { numero: textContent, relator: "" };
                 processosExtraidos.push(processoAtual);
                 
-                // Injetar borda superior no DOCX original
                 let pPr = p.getElementsByTagName("w:pPr")[0];
                 if (!pPr) {
                     pPr = xmlDoc.createElement("w:pPr");
@@ -143,7 +204,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 isDeletandoLixo = true; 
 
-                // NOVO: Injeção de Quadrados de Votação no DOCX
+                // Mantém a injeção dos quadrados Acompanhar/Divergir nativos no DOCX
                 const actionsXml = `
                     <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
                         <w:pPr>
