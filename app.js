@@ -50,12 +50,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 100);
     }
 
-    // Função utilitária pura para sanitização de strings de controle
+    // Função utilitária pura para sanitização de strings
     function normalizeTextForMatch(str) {
         if (!str) return "";
         return str.trim()
-                  .replace(/\s+/g, " ") // Colapsa espaços duplos ou tabulações
-                  .normalize("NFC")     // Resolve caracteres decompostos do XML do Word
+                  .replace(/\s+/g, " ")
+                  .normalize("NFC")
                   .toUpperCase();
     }
 
@@ -68,12 +68,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const xmlDoc = parser.parseFromString(documentXml, "application/xml");
         const paragraphs = Array.from(xmlDoc.getElementsByTagName("w:p"));
         
-        // Estados da Máquina
         let isHeader = true;
         let isDeletandoLixo = false;
         let capturandoAviso = false;
 
-        // Buffers de Dados
         let dataSessao = "";
         let avisoEspecial = [];
         let processosExtraidos = [];
@@ -83,29 +81,30 @@ document.addEventListener("DOMContentLoaded", () => {
             const textContent = p.textContent.trim();
             if (!textContent) {
                 p.parentNode.removeChild(p); 
-                continue; // Otimização de performance: pula processamento de nós vazios
+                continue; 
             }
 
             const textNorm = normalizeTextForMatch(textContent);
 
             // Fase 1: Análise de Cabeçalho e Gatilhos Prévios
             if (isHeader) {
-                // Regex corrigida com bloco Latin-1 (À-ÿ)
                 if (textNorm.includes("(HORÁRIO OFICIAL DE MATO GROSSO) DE")) {
                     const match = textContent.match(/de\s+([0-9]{1,2}\s+de\s+[A-Za-zÀ-ÿ]+\s+de\s+[0-9]{4})/i);
                     if (match) dataSessao = match[1];
                 }
 
-                // Condicional mutuamente exclusiva para captura do aviso legal
+                // CORREÇÃO: Liga o gatilho, mas não captura a própria linha
                 if (textNorm.includes("§4º DO ART. 937")) {
                     capturandoAviso = true;
-                    avisoEspecial.push(textContent); // Inclui a linha gatilho
+                    p.parentNode.removeChild(p);
+                    continue; // Pula para a próxima linha sem salvar esta
                 } 
                 else if (capturandoAviso && !textNorm.includes("FEITOS DE COMPETÊNCIA RECURSAL")) {
-                    avisoEspecial.push(textContent); // Continua capturando até bater no marcador
+                    if (textContent) avisoEspecial.push(textContent); // Só salva o que vier depois
+                    p.parentNode.removeChild(p);
+                    continue;
                 }
 
-                // Fim do Cabeçalho - Gatilho Mestre
                 if (textNorm.includes("FEITOS DE COMPETÊNCIA RECURSAL")) {
                     isHeader = false; 
                 } else {
@@ -123,7 +122,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 processoAtual = { numero: textContent, relator: "" };
                 processosExtraidos.push(processoAtual);
                 
-                // Injetar borda superior fina e cinza direto no XML do DOCX
+                // Injetar borda superior no DOCX original
                 let pPr = p.getElementsByTagName("w:pPr")[0];
                 if (!pPr) {
                     pPr = xmlDoc.createElement("w:pPr");
@@ -132,10 +131,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 const pBdr = xmlDoc.createElement("w:pBdr");
                 const topBdr = xmlDoc.createElement("w:top");
                 topBdr.setAttribute("w:val", "single");
-                topBdr.setAttribute("w:sz", "4"); // Espessura bem fina
+                topBdr.setAttribute("w:sz", "4");
                 topBdr.setAttribute("w:space", "10");
-                topBdr.setAttribute("w:color", "D3D3D3"); // Cinza Claro
-                
+                topBdr.setAttribute("w:color", "D3D3D3"); 
                 pBdr.appendChild(topBdr);
                 pPr.appendChild(pBdr);
 
@@ -145,6 +143,34 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 isDeletandoLixo = true; 
 
+                // NOVO: Injeção de Quadrados de Votação no DOCX
+                const actionsXml = `
+                    <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                        <w:pPr>
+                            <w:jc w:val="right"/>
+                            <w:spacing w:before="60" w:after="240"/>
+                        </w:pPr>
+                        <w:r>
+                            <w:rPr><w:b/><w:sz w:val="18"/><w:color w:val="555555"/></w:rPr>
+                            <w:t xml:space="preserve">DIVERGIR  </w:t>
+                        </w:r>
+                        <w:r>
+                            <w:rPr><w:sz w:val="40"/><w:color w:val="333333"/></w:rPr>
+                            <w:t>☐</w:t>
+                        </w:r>
+                        <w:r>
+                            <w:rPr><w:b/><w:sz w:val="18"/><w:color w:val="555555"/></w:rPr>
+                            <w:t xml:space="preserve">      ACOMPANHAR  </w:t>
+                        </w:r>
+                        <w:r>
+                            <w:rPr><w:sz w:val="40"/><w:color w:val="333333"/></w:rPr>
+                            <w:t>☐</w:t>
+                        </w:r>
+                    </w:p>
+                `;
+                const actionNode = parser.parseFromString(actionsXml, "application/xml").documentElement;
+                p.parentNode.insertBefore(xmlDoc.importNode(actionNode, true), p.nextSibling);
+
             } else if (isDeletandoLixo) {
                 p.parentNode.removeChild(p); 
             } else {
@@ -152,13 +178,11 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
 
-        // Empacota de volta para DOCX
         const serializer = new XMLSerializer();
         const newXmlString = serializer.serializeToString(xmlDoc);
         loadedZip.file("word/document.xml", newXmlString);
         processedDocxBlob = await loadedZip.generateAsync({ type: "blob" });
 
-        // Gera a versão HTML da Pauta
         generateHtmlTemplate(dataSessao, avisoEspecial, processosExtraidos);
     }
 
@@ -182,6 +206,7 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
         `).join("");
 
+        // A caixa só será criada se o array tiver textos capturados APÓS o gatilho
         let htmlAviso = avisoEspecial.length > 0 
             ? `<div class="aviso-box">${avisoEspecial.join("<br>")}</div>` 
             : "";
@@ -202,17 +227,17 @@ document.addEventListener("DOMContentLoaded", () => {
                     .data-sessao { font-size: 12pt; color: #333; font-weight: 600; }
                     .aviso-box { border: 2px solid #000; padding: 15px; margin: 0 auto 30px auto; max-width: 80%; text-align: center; font-weight: bold; font-size: 10pt; line-height: 1.4; border-radius: 4px; }
                     
-                    /* Layout Flexbox Corrigido e Ergonômico */
+                    /* Layout Flexbox */
                     .processo-card { border-top: 1px solid #cbd5e1; padding: 15px 0; page-break-inside: avoid; display: flex; justify-content: space-between; align-items: flex-start; }
                     .processo-info { flex: 1; padding-right: 20px; }
                     .processo-numero { font-weight: 700; font-size: 11pt; color: #000; margin-bottom: 6px; }
                     .processo-relator { font-size: 10pt; color: #475569; line-height: 1.3; }
                     
-                    /* Alvos Visuais Redimensionados para Impressão */
+                    /* Redução de 50% nos Quadrados (de 70px para 35px) */
                     .processo-actions { display: flex; gap: 20px; align-items: flex-start; margin-top: -2px; }
                     .action-box { display: flex; flex-direction: column; align-items: center; gap: 5px; }
                     .action-label { font-size: 8pt; font-weight: 700; color: #000; letter-spacing: 0.5px; }
-                    .square { width: 70px; height: 70px; border: 2px solid #000; border-radius: 6px; }
+                    .square { width: 35px; height: 35px; border: 2px solid #000; border-radius: 4px; }
                     
                     @page { size: A4 portrait; margin: 1.5cm; }
                     @media print {
